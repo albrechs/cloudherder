@@ -1,7 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as random from '@pulumi/random';
-import { defaults } from './defaults';
+import * as defaults from './defaults';
 import * as monitoring from './monitoring';
 import * as backup from './backup';
 import * as utils from '../utils';
@@ -128,7 +128,7 @@ export class CloudherderDatabase extends pulumi.ComponentResource {
             encryptSwitch = false;
         }
 
-        let engineArgs = getEngineConfig(dbArgs);
+        let engineArgs = defaults.getEngineConfig(dbArgs);
 
         this.instance = new aws.rds.Instance(
             'rds-instance',
@@ -142,19 +142,19 @@ export class CloudherderDatabase extends pulumi.ComponentResource {
                 skipFinalSnapshot: utils.optionalBoolComponent(
                     'rdsSkipFinalSnapshot',
                     dbArgs.rdsSkipFinalSnapshot,
-                    defaults
+                    defaults.rds
                 ),
                 copyTagsToSnapshot: true,
                 backupRetentionPeriod: utils.optionalNumberComponent(
                     'rdsBackupRetentionPeriod',
                     dbArgs.rdsBackupRetentionPeriod,
-                    defaults
+                    defaults.rds
                 ),
-                backupWindow: utils.optionalStringComponent('rdsBackupWindow', dbArgs.rdsBackupWindow, defaults),
+                backupWindow: utils.optionalStringComponent('rdsBackupWindow', dbArgs.rdsBackupWindow, defaults.rds),
                 autoMinorVersionUpgrade: utils.optionalBoolComponent(
                     'rdsAutoMinorVersionUpgrade',
                     dbArgs.rdsAutoMinorVersionUpgrade,
-                    defaults
+                    defaults.rds
                 ),
                 dbSubnetGroupName: this.subnetGroup.name,
                 availabilityZone: randDataSubnetAz,
@@ -242,64 +242,4 @@ export class CloudherderDatabase extends pulumi.ComponentResource {
                 )
         );
     }
-}
-
-interface DbErrorQuery {
-    name: string;
-    query: string;
-}
-
-interface EngineDefaultConfig {
-    engineName: pulumi.Input<string>;
-    engineVersion: pulumi.Input<string>;
-    parameterGroupName: pulumi.Input<string>;
-    logNames: Array<string>;
-    logErrorQueries: Array<DbErrorQuery>;
-}
-
-function getEngineConfig(passedArgs: CloudherderDatabaseArgs): EngineDefaultConfig {
-    const engineDefaults = {
-        postgres: {
-            engineName: 'postgres',
-            engineVersion: '12.5',
-            parameterGroupName: 'default.postgres12',
-            logNames: ['postgresql', 'upgrade'],
-            logErrorQueries: [
-                {
-                    name: 'psql-error-query',
-                    query: `filter @message not like /:LOG:/
-    | parse @message '* * *:*(*):*@*:[*]:*: *' as date,time,timezone,sourceIp,sourcePort,username,database,pid,level,message
-    | filter level not in ['LOG']
-    | display @logStream,@timestamp,sourceIp,username,database,pid,level,message
-    ${cloudwatch.queryFooter}`
-                } as DbErrorQuery
-            ]
-        } as EngineDefaultConfig
-    };
-
-    let engineName = passedArgs.rdsEngine;
-    const typedEngineKey = engineName as keyof typeof engineDefaults;
-    const defaults = engineDefaults[typedEngineKey];
-
-    let engineVersion: pulumi.Input<string>, parameterGroupName: pulumi.Input<string>;
-
-    if (passedArgs.rdsEngineVersion) {
-        engineVersion = passedArgs.rdsEngineVersion;
-    } else {
-        engineVersion = defaults.engineVersion;
-    }
-
-    if (passedArgs.rdsParameterGroupName) {
-        parameterGroupName = passedArgs.rdsParameterGroupName;
-    } else {
-        parameterGroupName = defaults.parameterGroupName;
-    }
-
-    return {
-        engineName: engineName,
-        engineVersion: engineVersion,
-        parameterGroupName: parameterGroupName,
-        logNames: defaults.logNames,
-        logErrorQueries: defaults.logErrorQueries
-    } as EngineDefaultConfig;
 }
