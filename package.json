@@ -1,0 +1,25 @@
+{
+    "name": "cloudherder",
+    "version": "1.0.0",
+    "description": "pulumi typescript components for AWS deployments",
+    "main": "index.ts",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/albrechs/cloudherder.git"
+    },
+    "author": "sta",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/albrechs/cloudherder/issues"
+    },
+    "homepage": "https://github.com/albrechs/cloudherder#readme",
+    "devDependencies": {
+        "@pulumi/aws": "^4.12.0",
+        "@pulumi/pulumi": "^3.6.1",
+        "@pulumi/random": "^4.2.0",
+        "typescript": "^4.3.5"
+    }
+}
