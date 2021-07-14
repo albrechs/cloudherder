@@ -1,7 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
-import { cloudwatch } from '../';
+import { cloudwatch } from '..';
 
-export interface CloudherderBounceQueueInstrumentationArgs {
+export interface SESBounceQueueInstrumentationArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentRegion: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
@@ -9,11 +9,11 @@ export interface CloudherderBounceQueueInstrumentationArgs {
     sqsQueueName: pulumi.Input<string>;
 }
 
-export class CloudherderBounceQueueInstrumentation extends pulumi.ComponentResource {
+export class SESBounceQueueInstrumentation extends pulumi.ComponentResource {
     readonly dashboardWidgets: pulumi.Output<cloudwatch.DashboardWidget[]>;
 
-    constructor(name: string, instArgs: CloudherderBounceQueueInstrumentationArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:bounceQueueInstrumentation', name, {}, opts);
+    constructor(name: string, instArgs: SESBounceQueueInstrumentationArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:SESBounceQueueInstrumentation', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         this.dashboardWidgets = pulumi.all([instArgs]).apply(([args]) => [
@@ -21,7 +21,7 @@ export class CloudherderBounceQueueInstrumentation extends pulumi.ComponentResou
                 `pu-${instArgs.deploymentEnv}-${instArgs.deploymentName} Bounce Queue Metrics`,
                 10
             ),
-            ...createBounceQueueWidgets({
+            ...createSESBounceQueueWidgets({
                 y: 11,
                 deploymentRegion: args.deploymentRegion,
                 snsTopicName: args.snsTopicName,
@@ -31,14 +31,14 @@ export class CloudherderBounceQueueInstrumentation extends pulumi.ComponentResou
     }
 }
 
-interface bounceQueueWidgetsArgs {
+interface SESBounceQueueWidgetsArgs {
     y: number;
     deploymentRegion: string;
     snsTopicName: string;
     sqsQueueName: string;
 }
 
-function createBounceQueueWidgets(args: bounceQueueWidgetsArgs): Array<cloudwatch.DashboardWidget> {
+function createSESBounceQueueWidgets(args: SESBounceQueueWidgetsArgs): Array<cloudwatch.DashboardWidget> {
     return [
         new cloudwatch.DashboardWidget({
             height: 3,

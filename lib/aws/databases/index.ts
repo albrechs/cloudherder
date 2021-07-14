@@ -37,14 +37,14 @@ export interface CloudherderDatabaseArgs {
     createDashboard?: boolean;
 }
 
-export class CloudherderDatabase extends pulumi.ComponentResource {
+export class PostgresInstance extends pulumi.ComponentResource {
     readonly instance: aws.rds.Instance;
     readonly instanceMasterPasswordArn: pulumi.Output<string>;
     readonly securityGroup: aws.ec2.SecurityGroup;
     readonly subnetGroup: aws.rds.SubnetGroup;
-    readonly instrumentation: pulumi.Output<monitoring.CloudherderRDSInstrumentation>;
+    readonly instrumentation: pulumi.Output<monitoring.RDSInstrumentation>;
     readonly readReplica?: aws.rds.Instance;
-    readonly backup?: backup.CloudherderRDSBackup;
+    readonly backup?: backup.RDSBackup;
 
     /**
      * @param name The unique name of the resource
@@ -52,7 +52,7 @@ export class CloudherderDatabase extends pulumi.ComponentResource {
      * @param opts Pulumi opts
      */
     constructor(name: string, dbArgs: CloudherderDatabaseArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:rds', name, {}, opts);
+        super('cloudherder:aws:PostgresInstance', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         this.subnetGroup = new aws.rds.SubnetGroup(
@@ -203,7 +203,7 @@ export class CloudherderDatabase extends pulumi.ComponentResource {
             );
         }
 
-        let logQueryArr: Array<cloudwatch.CloudherderQueryArgs> = [];
+        let logQueryArr: Array<cloudwatch.QueryArgs> = [];
         for (let i = 0; i < engineArgs.logErrorQueries.length; i++) {
             logQueryArr.push({
                 name: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-${engineArgs.logErrorQueries[i].name}`,
@@ -213,7 +213,7 @@ export class CloudherderDatabase extends pulumi.ComponentResource {
         }
 
         if (dbArgs.enableAwsBackupResources) {
-            this.backup = new backup.CloudherderRDSBackup(
+            this.backup = new backup.RDSBackup(
                 'rds-aws-backup',
                 {
                     deploymentEnv: dbArgs.deploymentEnv,
@@ -228,7 +228,7 @@ export class CloudherderDatabase extends pulumi.ComponentResource {
 
         this.instrumentation = pulumi.all([this.instance]).apply(
             ([instance]) =>
-                new monitoring.CloudherderRDSInstrumentation(
+                new monitoring.RDSInstrumentation(
                     'rds-instrumentation',
                     {
                         deploymentEnv: dbArgs.deploymentEnv,

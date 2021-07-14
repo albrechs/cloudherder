@@ -1,18 +1,20 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import { createKMSKeyUsePolicy } from './iam';
 import { accountId, region } from '../caller';
 
-export interface CloudherderKMSArgs {
+export interface KMSKeyArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
 }
 
-export class CloudherderKMS extends pulumi.ComponentResource {
+export class KMSKey extends pulumi.ComponentResource {
     readonly key: pulumi.Output<aws.kms.Key>;
     readonly keyAlias: aws.kms.Alias;
+    readonly keyUsePolicy: aws.iam.Policy;
 
-    constructor(name: string, kmsArgs: CloudherderKMSArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:kms', name, {}, opts);
+    constructor(name: string, kmsArgs: KMSKeyArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:KMSKey', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         const kmsKeyUsePolicy = pulumi.all([accountId, region]).apply(([accountId, region]) => ({
@@ -69,5 +71,13 @@ export class CloudherderKMS extends pulumi.ComponentResource {
             },
             defaultResourceOptions
         );
+
+        this.keyUsePolicy = createKMSKeyUsePolicy({
+            deploymentEnv: kmsArgs.deploymentEnv,
+            deploymentName: kmsArgs.deploymentName,
+            accountId: accountId,
+            region: region,
+            kmsKeyAliasName: this.keyAlias.name
+        });
     }
 }

@@ -1,8 +1,8 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import { cloudwatch } from '../';
+import { cloudwatch } from '..';
 
-export interface CloudherderSESInstrumentationArgs {
+export interface SESDomainInstrumentationArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentRegion: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
@@ -10,14 +10,14 @@ export interface CloudherderSESInstrumentationArgs {
     createDashboard?: boolean;
 }
 
-export class CloudherderSESInstrumentation extends pulumi.ComponentResource {
+export class SESDomainInstrumentation extends pulumi.ComponentResource {
     readonly configurationSet: aws.ses.ConfigurationSet;
     readonly eventDestination: aws.ses.EventDestination;
     readonly dashboardWidgets: pulumi.Output<cloudwatch.DashboardWidget[]>;
     readonly dashboard?: pulumi.Output<aws.cloudwatch.Dashboard>;
 
-    constructor(name: string, instArgs: CloudherderSESInstrumentationArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:sesInstrumentation', name, {}, opts);
+    constructor(name: string, instArgs: SESDomainInstrumentationArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:SESDomainInstrumentation', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         this.configurationSet = new aws.ses.ConfigurationSet(

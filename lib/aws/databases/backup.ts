@@ -1,7 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
-export interface CloudherderBackupArgs {
+export interface BackupArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
     rdsInstanceArn: pulumi.Input<string>;
@@ -9,7 +9,7 @@ export interface CloudherderBackupArgs {
     backupRoleArn?: pulumi.Input<string>;
 }
 
-export class CloudherderRDSBackup extends pulumi.ComponentResource {
+export class RDSBackup extends pulumi.ComponentResource {
     readonly vault: aws.backup.Vault;
     readonly vaultPolicy: pulumi.Output<aws.backup.VaultPolicy>;
     readonly plan: aws.backup.Plan;
@@ -20,8 +20,8 @@ export class CloudherderRDSBackup extends pulumi.ComponentResource {
      * @param backupArgs The arguments to configure the backup resources
      * @param opts Pulumi opts
      */
-    constructor(name: string, backupArgs: CloudherderBackupArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:backup', name, {}, opts);
+    constructor(name: string, backupArgs: BackupArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:RDSBackup', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         this.vault = new aws.backup.Vault(

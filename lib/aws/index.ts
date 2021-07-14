@@ -1,7 +1,7 @@
-export * as alb from './alb';
 export * as cloudwatch from './cloudwatch';
-//export * as ecs from './ecs';
-//export * as iam from './iam';
+//export * as containers from './containers';
+export * as databases from './databases';
+export * as email from './email';
+export * as identity from './identity';
 export * as kms from './kms';
-export * as rds from './rds';
-export * as ses from './ses';
+export * as loadbalancing from './loadbalancing';

@@ -2,7 +2,7 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as monitoring from './bounce-queue-monitoring';
 
-export interface CloudherderBounceQueueArgs {
+export interface SESBounceQueueArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentRegion: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
@@ -10,13 +10,13 @@ export interface CloudherderBounceQueueArgs {
     kmsKeyId?: pulumi.Input<string>;
 }
 
-export class CloudherderBounceQueue extends pulumi.ComponentResource {
+export class SESBounceQueue extends pulumi.ComponentResource {
     readonly snsTopic: aws.sns.Topic;
     readonly sqsQueue: aws.sqs.Queue;
-    readonly instrumentation: monitoring.CloudherderBounceQueueInstrumentation;
+    readonly instrumentation: monitoring.SESBounceQueueInstrumentation;
 
-    constructor(name: string, queueArgs: CloudherderBounceQueueArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:bounceQueue', name, {}, opts);
+    constructor(name: string, queueArgs: SESBounceQueueArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:SESBounceQueue', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         this.snsTopic = new aws.sns.Topic(
@@ -97,7 +97,7 @@ export class CloudherderBounceQueue extends pulumi.ComponentResource {
             defaultResourceOptions
         );
 
-        this.instrumentation = new monitoring.CloudherderBounceQueueInstrumentation(
+        this.instrumentation = new monitoring.SESBounceQueueInstrumentation(
             'bounce-instrumentation',
             {
                 deploymentEnv: queueArgs.deploymentEnv,

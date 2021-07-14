@@ -1,21 +1,20 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as utils from '../../utils';
 
 export const queryFooter = `| sort @timestamp desc
     | limit 40`;
 
-export interface CloudherderCloudwatchDashboardArgs {
+export interface CloudwatchDashboardArgs {
     resourcePrefix: string;
     deploymentRegion: string;
     resourceWidgetSections: Array<pulumi.Input<Array<DashboardWidget>>>;
 }
 
-export class CloudherderCloudwatchDashboard extends pulumi.ComponentResource {
+export class CloudwatchDashboard extends pulumi.ComponentResource {
     readonly dashboard: pulumi.Output<aws.cloudwatch.Dashboard>;
 
-    constructor(name: string, cwArgs: CloudherderCloudwatchDashboardArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:cloudwatch', name, {}, opts);
+    constructor(name: string, cwArgs: CloudwatchDashboardArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:CloudwatchDashboard', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         const stackedWidgets = pulumi
@@ -69,13 +68,13 @@ export class CloudherderCloudwatchDashboard extends pulumi.ComponentResource {
     }
 }
 
-export interface CloudherderQueryArgs {
+export interface QueryArgs {
     name: pulumi.Input<string>;
     logGroupName: pulumi.Input<string>;
     query: pulumi.Input<string>;
 }
 
-export interface logWidgetArgs {
+export interface LogWidgetArgs {
     x: number;
     y: number;
     logGroupName: pulumi.Input<string>;
@@ -84,7 +83,7 @@ export interface logWidgetArgs {
     deploymentRegion: pulumi.Input<string>;
 }
 
-export function createLogWidget(args: logWidgetArgs): DashboardWidget {
+export function createLogWidget(args: LogWidgetArgs): DashboardWidget {
     return new DashboardWidget({
         height: 6,
         width: 24,
@@ -106,7 +105,7 @@ export function createLogWidget(args: logWidgetArgs): DashboardWidget {
 
 export interface logWidgetsArgs {
     y: number;
-    queries: CloudherderQueryArgs[];
+    queries: QueryArgs[];
     deploymentRegion: pulumi.Input<string>;
 }
 

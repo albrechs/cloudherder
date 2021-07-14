@@ -2,22 +2,22 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { cloudwatch } from '../';
 
-export interface CloudherderRDSInstrumentationArgs {
+export interface RDSInstrumentationArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
     deploymentRegion: pulumi.Input<string>;
-    logQueries: cloudwatch.CloudherderQueryArgs[];
+    logQueries: cloudwatch.QueryArgs[];
     rdsInstanceName: pulumi.Input<string>;
     createDashboard?: boolean;
 }
 
-export class CloudherderRDSInstrumentation extends pulumi.ComponentResource {
+export class RDSInstrumentation extends pulumi.ComponentResource {
     readonly logQueries: aws.cloudwatch.QueryDefinition[];
     readonly dashboardWidgets: pulumi.Output<cloudwatch.DashboardWidget[]>;
     readonly dashboard?: pulumi.Output<aws.cloudwatch.Dashboard>;
 
-    constructor(name: string, instArgs: CloudherderRDSInstrumentationArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:rdsInstrumentation', name, {}, opts);
+    constructor(name: string, instArgs: RDSInstrumentationArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:RDSInstrumentation', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         this.logQueries = [];

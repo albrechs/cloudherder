@@ -1,27 +1,30 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as monitoring from './monitoring';
-import { CloudherderBounceQueue } from './bounce-queue';
+import { SESBounceQueue } from './bounce-queue';
+import { SESFromEmail } from './iam';
+import * as iam from './iam';
 import { accountId, region } from '../caller';
 
-export interface CloudherderSESArgs {
+export interface SESDomainArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
     route53ZoneId: Promise<string>;
     mailFromDomainName: pulumi.Input<string>;
     mailFromAccounts: Array<string>;
+    createSMTPServiceAccounts: boolean;
     kmsKeyId?: pulumi.Input<string>;
     createDashboard?: boolean;
 }
 
-export class CloudherderSES extends pulumi.ComponentResource {
+export class SESDomain extends pulumi.ComponentResource {
     readonly domainIdentity: aws.ses.DomainIdentity;
-    readonly fromEmails: Array<pulumi.Output<string>>;
-    readonly bounceQueue: CloudherderBounceQueue;
-    readonly instrumentation: monitoring.CloudherderSESInstrumentation;
+    readonly fromEmails?: Array<iam.SESFromEmail>;
+    readonly bounceQueue: SESBounceQueue;
+    readonly instrumentation: monitoring.SESDomainInstrumentation;
 
-    constructor(name: string, sesArgs: CloudherderSESArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:ses', name, {}, opts);
+    constructor(name: string, sesArgs: SESDomainArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:SESDomain', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         this.domainIdentity = new aws.ses.DomainIdentity(
@@ -32,15 +35,26 @@ export class CloudherderSES extends pulumi.ComponentResource {
             defaultResourceOptions
         );
 
-        this.fromEmails = [];
-        pulumi.all([sesArgs.mailFromDomainName]).apply(([domain]) => {
+        if (sesArgs.mailFromAccounts.length > 0) {
+            this.fromEmails = [];
             for (let i = 0; i < sesArgs.mailFromAccounts.length; i++) {
-                this.fromEmails.push(pulumi.interpolate`${sesArgs.mailFromAccounts[i]}@${domain}`);
+                this.fromEmails.push(
+                    new SESFromEmail(`ses-${sesArgs.mailFromAccounts[i]}-from-email-configuration`, {
+                        deploymentEnv: sesArgs.deploymentEnv,
+                        deploymentName: sesArgs.deploymentName,
+                        accountId: accountId,
+                        region: region,
+                        fromAccount: sesArgs.mailFromAccounts[i],
+                        domainIdentity: this.domainIdentity.domain,
+                        createSmtpServiceAccount: sesArgs.createSMTPServiceAccounts,
+                        kmsKeyArn: sesArgs.kmsKeyId
+                    })
+                );
             }
-        });
+        }
 
-        this.bounceQueue = new CloudherderBounceQueue(
-            `${sesArgs.mailFromDomainName}-bounce-queue`,
+        this.bounceQueue = new SESBounceQueue(
+            `ses-${sesArgs.mailFromDomainName}-bounce-queue`,
             {
                 deploymentEnv: sesArgs.deploymentEnv,
                 deploymentRegion: region,
@@ -140,7 +154,7 @@ export class CloudherderSES extends pulumi.ComponentResource {
             }
         );
 
-        this.instrumentation = new monitoring.CloudherderSESInstrumentation(
+        this.instrumentation = new monitoring.SESDomainInstrumentation(
             'ses-instrumentation',
             {
                 deploymentEnv: sesArgs.deploymentEnv,

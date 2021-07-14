@@ -47,3 +47,11 @@ export function optionalBoolComponent(configKey: string, passedValue: boolean | 
 export function capitalizeWord(string: pulumi.Input<string>): string {
     return string.toString().charAt(0).toUpperCase() + string.toString().slice(1);
 }
+
+export function insertServiceId(serviceId: pulumi.Input<string> | undefined): pulumi.Input<string> | undefined {
+    if (serviceId != undefined) {
+        return `-${serviceId}`;
+    } else {
+        return undefined;
+    }
+}

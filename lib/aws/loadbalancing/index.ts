@@ -1,22 +1,22 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import { cloudwatch } from '../';
+import * as monitoring from './monitoring';
 import * as utils from '../../utils';
 
-export interface CloudherderRedirectRuleArgs {
+export interface RedirectRuleArgs {
     url: pulumi.Input<string>;
     pathPattern: Array<string>;
 }
 
-export interface CloudherderTargetGroupArgs {
+export interface TargetGroupArgs {
     port: pulumi.Input<number>;
     healthCheckPath: pulumi.Input<string>;
     healthyThreshold: pulumi.Input<number>;
     unhealthyThreshold: pulumi.Input<number>;
-    redirectRule?: CloudherderRedirectRuleArgs;
+    redirectRule?: RedirectRuleArgs;
 }
 
-export interface CloudherderALBArgs {
+export interface AppLoadbalancerArgs {
     url: pulumi.Input<string>;
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
@@ -28,24 +28,24 @@ export interface CloudherderALBArgs {
     enableLogging: boolean;
     loggingBucketId?: pulumi.Input<string>;
     route53ZoneId: Promise<string>;
-    target: CloudherderTargetGroupArgs;
+    target: TargetGroupArgs;
     createDashboard?: boolean;
 }
 
-export class CloudherderALB extends pulumi.ComponentResource {
+export class AppLoadbalancer extends pulumi.ComponentResource {
     readonly securityGroup: aws.ec2.SecurityGroup;
     readonly loadBalancer: aws.lb.LoadBalancer;
     readonly targetGroup: aws.lb.TargetGroup;
     readonly route53Record: aws.route53.Record;
-    readonly instrumentation: CloudherderALBInstrumentation;
+    readonly instrumentation: monitoring.AppLoadbalancerInstrumentation;
 
     /**
      * @param name The unique name of the resource
      * @param albArgs The arguments to configure the load balancer resources
      * @param opts Pulumi opts
      */
-    constructor(name: string, albArgs: CloudherderALBArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:alb', name, {}, opts);
+    constructor(name: string, albArgs: AppLoadbalancerArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:AppLoadbalancer', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
         let accessLogSettings: aws.types.input.lb.LoadBalancerAccessLogs | undefined = {
@@ -61,7 +61,7 @@ export class CloudherderALB extends pulumi.ComponentResource {
         }
 
         this.securityGroup = new aws.ec2.SecurityGroup(
-            `${albArgs.deploymentName}${insertServiceId(albArgs.serviceId)}-alb-sg`,
+            `${albArgs.deploymentName}${utils.insertServiceId(albArgs.serviceId)}-alb-sg`,
             {
                 description: 'Security group for the the cloudherder-web pulumi deployment ALB',
                 vpcId: albArgs.vpcId,
@@ -74,11 +74,11 @@ export class CloudherderALB extends pulumi.ComponentResource {
         );
 
         this.loadBalancer = new aws.lb.LoadBalancer(
-            `${albArgs.deploymentName}${insertServiceId(albArgs.serviceId)}-alb`,
+            `${albArgs.deploymentName}${utils.insertServiceId(albArgs.serviceId)}-alb`,
             {
-                name: `pu-${albArgs.deploymentEnv}-${albArgs.deploymentName}${insertServiceId(albArgs.serviceId)}-alb-${
-                    albArgs.deploymentName
-                }`,
+                name: `pu-${albArgs.deploymentEnv}-${albArgs.deploymentName}${utils.insertServiceId(
+                    albArgs.serviceId
+                )}-alb-${albArgs.deploymentName}`,
                 internal: albArgs.internal,
                 loadBalancerType: 'application',
                 securityGroups: [this.securityGroup.id],
@@ -86,7 +86,7 @@ export class CloudherderALB extends pulumi.ComponentResource {
                 enableDeletionProtection: false,
                 accessLogs: accessLogSettings,
                 tags: {
-                    Name: `pu-${albArgs.deploymentEnv}-${albArgs.deploymentName}${insertServiceId(
+                    Name: `pu-${albArgs.deploymentEnv}-${albArgs.deploymentName}${utils.insertServiceId(
                         albArgs.serviceId
                     )}-alb-${albArgs.deploymentName}`,
                     pulumi: 'true'
@@ -96,7 +96,7 @@ export class CloudherderALB extends pulumi.ComponentResource {
         );
 
         this.targetGroup = new aws.lb.TargetGroup(
-            `${albArgs.deploymentName}${insertServiceId(albArgs.serviceId)}-alb-target-group`,
+            `${albArgs.deploymentName}${utils.insertServiceId(albArgs.serviceId)}-alb-target-group`,
             {
                 port: albArgs.target.port,
                 protocol: 'HTTP',
@@ -113,7 +113,7 @@ export class CloudherderALB extends pulumi.ComponentResource {
         );
 
         const listenerHttpRedirect = new aws.lb.Listener(
-            `${albArgs.deploymentName}${insertServiceId(albArgs.serviceId)}-alb-http-redirect`,
+            `${albArgs.deploymentName}${utils.insertServiceId(albArgs.serviceId)}-alb-http-redirect`,
             {
                 loadBalancerArn: this.loadBalancer.arn,
                 port: 80,
@@ -146,7 +146,7 @@ export class CloudherderALB extends pulumi.ComponentResource {
         );
 
         const listenerHttps = new aws.lb.Listener(
-            `${albArgs.deploymentName}${insertServiceId(albArgs.serviceId)}-alb-https-listener`,
+            `${albArgs.deploymentName}${utils.insertServiceId(albArgs.serviceId)}-alb-https-listener`,
             {
                 loadBalancerArn: this.loadBalancer.arn,
                 port: 443,
@@ -203,7 +203,7 @@ export class CloudherderALB extends pulumi.ComponentResource {
 
         if (albArgs.target.redirectRule) {
             const redirectRule = new aws.lb.ListenerRule(
-                `${albArgs.deploymentName}${insertServiceId(albArgs.serviceId)}-alb-redirect`,
+                `${albArgs.deploymentName}${utils.insertServiceId(albArgs.serviceId)}-alb-redirect`,
                 {
                     listenerArn: listenerHttps.arn,
                     priority: 100,
@@ -228,7 +228,7 @@ export class CloudherderALB extends pulumi.ComponentResource {
             );
         }
 
-        this.instrumentation = new CloudherderALBInstrumentation(
+        this.instrumentation = new monitoring.AppLoadbalancerInstrumentation(
             `${albArgs.deploymentName}-alb-instrumentation`,
             {
                 deploymentEnv: albArgs.deploymentEnv,
@@ -241,144 +241,5 @@ export class CloudherderALB extends pulumi.ComponentResource {
             },
             defaultResourceOptions
         );
-    }
-}
-
-interface CloudherderALBInstrumentationArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
-    region: pulumi.Input<string>;
-    serviceId?: pulumi.Input<string>;
-    targetGroupId: pulumi.Input<string>;
-    loadbalancerId: pulumi.Input<string>;
-    createDashboard?: boolean;
-}
-
-class CloudherderALBInstrumentation extends pulumi.ComponentResource {
-    readonly dashboardWidgets: pulumi.Output<cloudwatch.DashboardWidget[]>;
-    readonly dashboard?: pulumi.Output<aws.cloudwatch.Dashboard>;
-
-    /**
-     * a
-     * s
-     * d
-     */
-    constructor(name: string, instArgs: CloudherderALBInstrumentationArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:albInstrumentation', name, {}, opts);
-        const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
-
-        this.dashboardWidgets = pulumi
-            .all([instArgs.targetGroupId, instArgs.loadbalancerId])
-            .apply(([targetGroupId, loadbalancerId]) => [
-                cloudwatch.createSectionHeader(
-                    `pu-${instArgs.deploymentEnv}-${instArgs.deploymentName} ${
-                        instArgs.serviceId != undefined ? utils.capitalizeWord(instArgs.serviceId) : ''
-                    } ALB Metrics`
-                ),
-                ...createAlbPerformanceMetricsWidget({
-                    x: 0,
-                    y: 1,
-                    region: instArgs.region,
-                    deploymentName: instArgs.deploymentName,
-                    serviceId: instArgs.serviceId,
-                    targetGroupId: targetGroupId,
-                    loadbalancerId: loadbalancerId
-                })
-            ]);
-
-        if (instArgs.createDashboard) {
-            this.dashboard = pulumi.all([this.dashboardWidgets]).apply(
-                ([widgets]) =>
-                    new aws.cloudwatch.Dashboard(
-                        `${instArgs.deploymentName}${insertServiceId(instArgs.serviceId)}-alb-cw-dashboard`,
-                        {
-                            dashboardName: `pu-${instArgs.deploymentEnv}-${instArgs.deploymentName}${insertServiceId(
-                                instArgs.serviceId
-                            )}-alb-dashboard`,
-                            dashboardBody: JSON.stringify({
-                                widgets: widgets
-                            })
-                        },
-                        defaultResourceOptions
-                    )
-            );
-        } else {
-            this.dashboard = undefined;
-        }
-    }
-}
-
-interface ALBPerformanceMetricsWidgetArgs {
-    x: number;
-    y: number;
-    region: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
-    serviceId?: pulumi.Input<string>;
-    targetGroupId: pulumi.Input<string>;
-    loadbalancerId: pulumi.Input<string>;
-}
-
-function createAlbPerformanceMetricsWidget(args: ALBPerformanceMetricsWidgetArgs): Array<cloudwatch.DashboardWidget> {
-    return [
-        new cloudwatch.DashboardWidget({
-            height: 3,
-            width: 24,
-            x: args.x,
-            y: args.y,
-            type: 'metric',
-            properties: {
-                metrics: [
-                    [
-                        'AWS/ApplicationELB',
-                        'RequestCount',
-                        'TargetGroup',
-                        args.targetGroupId,
-                        'LoadBalancer',
-                        args.loadbalancerId
-                    ],
-                    ['.', 'HTTPCode_Target_2XX_Count', '.', '.', '.', '.'],
-                    ['.', 'HTTPCode_Target_3XX_Count', '.', '.', '.', '.'],
-                    ['.', 'HTTPCode_Target_4XX_Count', '.', '.', '.', '.'],
-                    ['.', 'TargetResponseTime', '.', '.', '.', '.', { stat: 'Average' }]
-                ],
-                view: 'singleValue',
-                region: args.region,
-                stat: 'Sum',
-                period: 900,
-                title: `${args.deploymentName} ${args.serviceId != undefined ? args.serviceId : ''} Target Group Health`
-            }
-        }),
-        new cloudwatch.DashboardWidget({
-            height: 6,
-            width: 24,
-            x: args.x,
-            y: args.y + 6,
-            type: 'metric',
-            properties: {
-                metrics: [
-                    [
-                        'AWS/ApplicationELB',
-                        'HealthyHostCount',
-                        'TargetGroup',
-                        args.targetGroupId,
-                        'LoadBalancer',
-                        args.loadbalancerId
-                    ]
-                ],
-                view: 'timeSeries',
-                stacked: false,
-                region: args.region,
-                stat: 'Minimum',
-                period: 300
-            }
-        })
-    ];
-}
-
-function insertServiceId(serviceId: pulumi.Input<string> | undefined): pulumi.Input<string> | undefined {
-    if (serviceId != undefined) {
-        return `-${serviceId}`;
-    } else {
-        return undefined;
     }
 }
