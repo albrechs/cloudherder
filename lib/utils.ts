@@ -47,23 +47,3 @@ export function optionalBoolComponent(configKey: string, passedValue: boolean | 
 export function capitalizeWord(string: pulumi.Input<string>): string {
     return string.toString().charAt(0).toUpperCase() + string.toString().slice(1);
 }
-
-export function sanitizeQueryString(string: string): string {
-    let extraEscapeRemoved = string.split('\\n').join('\n');
-    return extraEscapeRemoved.slice(1).slice(0, -1);
-}
-
-export interface dashQueryStringArgs {
-    logGroupName: pulumi.Input<string>;
-    baseErrorQuery: pulumi.Input<string>;
-}
-
-export function createDashboardQueryString(args: dashQueryStringArgs): string {
-    let queryHead: string = `SOURCE '${args.logGroupName}'
-    | fields @timestamp, @message`;
-
-    return sanitizeQueryString(
-        JSON.stringify(`${queryHead}
-    | ${args.baseErrorQuery}`)
-    );
-}

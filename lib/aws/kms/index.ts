@@ -1,25 +1,21 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import { accountId, region } from '../caller';
 
 export interface CloudherderKMSArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
-    accountId: pulumi.Input<string>;
-    region: pulumi.Input<string>;
 }
 
 export class CloudherderKMS extends pulumi.ComponentResource {
     readonly key: pulumi.Output<aws.kms.Key>;
     readonly keyAlias: aws.kms.Alias;
 
-    /**
-     *
-     */
     constructor(name: string, kmsArgs: CloudherderKMSArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:kms', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
-        const kmsKeyUsePolicy = pulumi.all([kmsArgs.accountId]).apply(([accountId]) => ({
+        const kmsKeyUsePolicy = pulumi.all([accountId, region]).apply(([accountId, region]) => ({
             Version: '2012-10-17',
             Id: 'kms-deployment-key-policy',
             Statement: [
@@ -36,13 +32,13 @@ export class CloudherderKMS extends pulumi.ComponentResource {
                     Sid: 'AllowLogExport',
                     Effect: 'Allow',
                     Principal: {
-                        Service: `logs.${kmsArgs.region}.amazonaws.com`
+                        Service: `logs.${region}.amazonaws.com`
                     },
                     Action: ['kms:Encrypt*', 'kms:Decrypt*', 'kms:ReEncrypt*', 'kms:GenerateDataKey*', 'kms:Describe*'],
                     Resource: '*',
                     Condition: {
                         ArnEquals: {
-                            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${kmsArgs.region}:${accountId}:log-group:pu-${kmsArgs.deploymentEnv}-${kmsArgs.deploymentName}-log-grp`
+                            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${accountId}:log-group:pu-${kmsArgs.deploymentEnv}-${kmsArgs.deploymentName}-log-grp`
                         }
                     }
                 }

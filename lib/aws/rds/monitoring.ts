@@ -1,11 +1,11 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as cloudwatch from '../cloudwatch';
+import { cloudwatch } from '../';
 
 export interface CloudherderRDSInstrumentationArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
-    region: pulumi.Input<string>;
+    deploymentRegion: pulumi.Input<string>;
     logQueries: cloudwatch.CloudherderQueryArgs[];
     rdsInstanceName: pulumi.Input<string>;
     createDashboard?: boolean;
@@ -16,11 +16,6 @@ export class CloudherderRDSInstrumentation extends pulumi.ComponentResource {
     readonly dashboardWidgets: pulumi.Output<cloudwatch.DashboardWidget[]>;
     readonly dashboard?: pulumi.Output<aws.cloudwatch.Dashboard>;
 
-    /**
-     * a
-     * s
-     * d
-     */
     constructor(name: string, instArgs: CloudherderRDSInstrumentationArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:rdsInstrumentation', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
@@ -48,13 +43,13 @@ export class CloudherderRDSInstrumentation extends pulumi.ComponentResource {
                 cloudwatch.createSectionHeader(`pu-${instArgs.deploymentEnv}-${instArgs.deploymentName} RDS Metrics`),
                 ...createRdsMonitoringWidgets({
                     y: 1,
-                    region: instArgs.region,
+                    deploymentRegion: instArgs.deploymentRegion,
                     instanceName: rdsInstanceName
                 }),
                 ...cloudwatch.createLogWidgets({
                     y: 13,
                     queries: logQueries,
-                    region: instArgs.region
+                    deploymentRegion: instArgs.deploymentRegion
                 })
             ]);
 
@@ -80,7 +75,7 @@ export class CloudherderRDSInstrumentation extends pulumi.ComponentResource {
 
 interface rdsMonitorWidgetArgs {
     y: number;
-    region: pulumi.Input<string>;
+    deploymentRegion: pulumi.Input<string>;
     instanceName: pulumi.Input<string>;
 }
 
@@ -98,7 +93,7 @@ function createRdsMonitoringWidgets(args: rdsMonitorWidgetArgs): Array<cloudwatc
                     ['...', `${args.instanceName}-replica`]
                 ],
                 view: 'timeSeries',
-                region: args.region,
+                deploymentRegion: args.deploymentRegion,
                 title: 'Database Connections',
                 stat: 'Sum',
                 period: 900,
@@ -118,7 +113,7 @@ function createRdsMonitoringWidgets(args: rdsMonitorWidgetArgs): Array<cloudwatc
                 ],
                 view: 'timeSeries',
                 stacked: false,
-                region: args.region,
+                deploymentRegion: args.deploymentRegion,
                 stat: 'Average',
                 period: 300
             }
@@ -136,7 +131,7 @@ function createRdsMonitoringWidgets(args: rdsMonitorWidgetArgs): Array<cloudwatc
                 ],
                 view: 'timeSeries',
                 stacked: false,
-                region: args.region,
+                deploymentRegion: args.deploymentRegion,
                 stat: 'Average',
                 period: 300
             }
@@ -154,7 +149,7 @@ function createRdsMonitoringWidgets(args: rdsMonitorWidgetArgs): Array<cloudwatc
                 ],
                 view: 'timeSeries',
                 stacked: false,
-                region: args.region,
+                deploymentRegion: args.deploymentRegion,
                 stat: 'Average',
                 period: 300
             }
@@ -173,7 +168,7 @@ function createRdsMonitoringWidgets(args: rdsMonitorWidgetArgs): Array<cloudwatc
                     ['...', `${args.instanceName}-replica`]
                 ],
                 view: 'timeSeries',
-                region: args.region,
+                deploymentRegion: args.deploymentRegion,
                 title: 'Network Traffic',
                 stat: 'Sum',
                 period: 3600,

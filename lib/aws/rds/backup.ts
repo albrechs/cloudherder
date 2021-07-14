@@ -4,8 +4,8 @@ import * as aws from '@pulumi/aws';
 export interface CloudherderBackupArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
-    kmsKeyArn?: pulumi.Input<string>;
     rdsInstanceArn: pulumi.Input<string>;
+    kmsKeyArn?: pulumi.Input<string>;
     backupRoleArn?: pulumi.Input<string>;
 }
 

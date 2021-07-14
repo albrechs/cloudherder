@@ -1,9 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as cloudwatch from '../cloudwatch';
-import * as utils from '../utils';
-import { stringify } from 'querystring';
-import { access } from 'fs';
+import { cloudwatch } from '../';
+import * as utils from '../../utils';
 
 export interface CloudherderRedirectRuleArgs {
     url: pulumi.Input<string>;

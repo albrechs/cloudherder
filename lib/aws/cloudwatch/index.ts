@@ -1,24 +1,19 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as utils from '../utils';
+import * as utils from '../../utils';
 
 export const queryFooter = `| sort @timestamp desc
     | limit 40`;
 
 export interface CloudherderCloudwatchDashboardArgs {
     resourcePrefix: string;
-    region: string;
+    deploymentRegion: string;
     resourceWidgetSections: Array<pulumi.Input<Array<DashboardWidget>>>;
 }
 
 export class CloudherderCloudwatchDashboard extends pulumi.ComponentResource {
     readonly dashboard: pulumi.Output<aws.cloudwatch.Dashboard>;
 
-    /**
-     * a
-     * s
-     * d
-     */
     constructor(name: string, cwArgs: CloudherderCloudwatchDashboardArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:cloudwatch', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
@@ -59,7 +54,7 @@ export class CloudherderCloudwatchDashboard extends pulumi.ComponentResource {
                                         ],
                                         view: 'singleValue',
                                         stacked: false,
-                                        region: cwArgs.region,
+                                        region: cwArgs.deploymentRegion,
                                         stat: 'Sum',
                                         period: 3600,
                                         title: 'Log Group Events per Hour'
@@ -86,7 +81,7 @@ export interface logWidgetArgs {
     logGroupName: pulumi.Input<string>;
     baseQuery: pulumi.Input<string>;
     title: pulumi.Input<string>;
-    region: pulumi.Input<string>;
+    deploymentRegion: pulumi.Input<string>;
 }
 
 export function createLogWidget(args: logWidgetArgs): DashboardWidget {
@@ -97,11 +92,11 @@ export function createLogWidget(args: logWidgetArgs): DashboardWidget {
         y: args.y,
         type: 'log',
         properties: {
-            query: utils.createDashboardQueryString({
+            query: createDashboardQueryString({
                 logGroupName: args.logGroupName,
                 baseErrorQuery: args.baseQuery
             }),
-            region: args.region,
+            region: args.deploymentRegion,
             stacked: false,
             title: args.title,
             view: 'table'
@@ -112,7 +107,7 @@ export function createLogWidget(args: logWidgetArgs): DashboardWidget {
 export interface logWidgetsArgs {
     y: number;
     queries: CloudherderQueryArgs[];
-    region: pulumi.Input<string>;
+    deploymentRegion: pulumi.Input<string>;
 }
 
 export function createLogWidgets(args: logWidgetsArgs): DashboardWidget[] {
@@ -128,7 +123,7 @@ export function createLogWidgets(args: logWidgetsArgs): DashboardWidget[] {
                 y: yCount,
                 logGroupName: args.queries[i].logGroupName,
                 baseQuery: args.queries[i].query,
-                region: args.region
+                deploymentRegion: args.deploymentRegion
             })
         );
         yCount = yCount + 6;
@@ -214,4 +209,24 @@ function getNextStart(widget: DashboardWidget): number {
 
 function getLastWidgetArrElement(arr: DashboardWidget[]): DashboardWidget {
     return arr[arr.length - 1];
+}
+
+export function sanitizeQueryString(string: string): string {
+    let extraEscapeRemoved = string.split('\\n').join('\n');
+    return extraEscapeRemoved.slice(1).slice(0, -1);
+}
+
+export interface dashQueryStringArgs {
+    logGroupName: pulumi.Input<string>;
+    baseErrorQuery: pulumi.Input<string>;
+}
+
+export function createDashboardQueryString(args: dashQueryStringArgs): string {
+    let queryHead: string = `SOURCE '${args.logGroupName}'
+    | fields @timestamp, @message`;
+
+    return sanitizeQueryString(
+        JSON.stringify(`${queryHead}
+    | ${args.baseErrorQuery}`)
+    );
 }

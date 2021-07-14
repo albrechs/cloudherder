@@ -4,13 +4,13 @@ import * as random from '@pulumi/random';
 import * as defaults from './defaults';
 import * as monitoring from './monitoring';
 import * as backup from './backup';
-import * as utils from '../utils';
-import * as cloudwatch from '../cloudwatch';
+import * as utils from '../../utils';
+import { cloudwatch } from '../';
+import { region } from '../caller';
 
 export interface CloudherderDatabaseArgs {
     deploymentEnv: pulumi.Input<string>;
     deploymentName: pulumi.Input<string>;
-    region: pulumi.Input<string>;
     vpcId: pulumi.Input<string>;
     subnetIds: pulumi.Input<Array<string>>;
     subnetAvailabityZones: pulumi.Input<Array<string>>;
@@ -233,7 +233,7 @@ export class CloudherderDatabase extends pulumi.ComponentResource {
                     {
                         deploymentEnv: dbArgs.deploymentEnv,
                         deploymentName: dbArgs.deploymentName,
-                        region: dbArgs.region,
+                        deploymentRegion: region,
                         rdsInstanceName: instance.identifier,
                         createDashboard: dbArgs.createDashboard,
                         logQueries: logQueryArr
