@@ -2,12 +2,12 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as crypto from 'crypto';
 import * as utils from '../../utils';
+import { region } from '../caller';
 
 export interface ServiceAccountArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
-    region: Promise<string>;
-    serviceId?: pulumi.Input<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     kmsKeyArn?: pulumi.Input<string>;
     createSmtpPassword?: boolean;
 }
@@ -21,27 +21,29 @@ export class ServiceAccount extends pulumi.ComponentResource {
     constructor(name: string, svcAcctArgs: ServiceAccountArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:ServiceAccount', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            svcAcctArgs.deploymentEnv,
+            svcAcctArgs.deploymentName,
+            svcAcctArgs.serviceId
+        );
 
         this.serviceAccount = new aws.iam.User(
             `iam${utils.insertServiceId(svcAcctArgs.serviceId)}-svc-account`,
             {
-                name: `pu-${svcAcctArgs.deploymentEnv}-${svcAcctArgs.deploymentName}${utils.insertServiceId(
-                    svcAcctArgs.serviceId
-                )}-svc-account`,
+                name: `${resourcePrefix}-svc-account`,
                 tags: {
-                    Name: `pu-${svcAcctArgs.deploymentEnv}-${svcAcctArgs.deploymentName}${utils.insertServiceId(
-                        svcAcctArgs.serviceId
-                    )}-svc-account`,
+                    Name: `${resourcePrefix}-svc-account`,
                     pulumi: 'true'
                 }
             },
             defaultResourceOptions
         );
 
-        let ssmPathPrefix = `/${svcAcctArgs.deploymentEnv}/${svcAcctArgs.deploymentName}`;
-        if (svcAcctArgs.serviceId) {
-            ssmPathPrefix = ssmPathPrefix + `/${svcAcctArgs.serviceId}`;
-        }
+        const ssmPathPrefix = utils.buildSSMPathPrefix(
+            svcAcctArgs.deploymentEnv,
+            svcAcctArgs.deploymentName,
+            svcAcctArgs.serviceId
+        );
         const serviceAccountCreds = new aws.iam.AccessKey(
             `iam${utils.insertServiceId(svcAcctArgs.serviceId)}-svc-account-keys`,
             {
@@ -57,9 +59,7 @@ export class ServiceAccount extends pulumi.ComponentResource {
                 type: 'String',
                 value: serviceAccountCreds.id,
                 tags: {
-                    Name: `pu-${svcAcctArgs.deploymentEnv}-${svcAcctArgs.deploymentName}${utils.insertServiceId(
-                        svcAcctArgs.serviceId
-                    )}-access-key-id-ssm`,
+                    Name: `${resourcePrefix}-access-key-id-ssm`,
                     pulumi: 'true'
                 }
             },
@@ -76,9 +76,7 @@ export class ServiceAccount extends pulumi.ComponentResource {
                 keyId: svcAcctArgs.kmsKeyArn,
                 value: serviceAccountCreds.secret,
                 tags: {
-                    Name: `pu-${svcAcctArgs.deploymentEnv}-${svcAcctArgs.deploymentName}${utils.insertServiceId(
-                        svcAcctArgs.serviceId
-                    )}-secret-access-key-ssm`,
+                    Name: `${resourcePrefix}-secret-access-key-ssm`,
                     pulumi: 'true'
                 }
             },
@@ -94,11 +92,9 @@ export class ServiceAccount extends pulumi.ComponentResource {
                     name: `${ssmPathPrefix}/smtp-password`,
                     type: 'SecureString',
                     keyId: svcAcctArgs.kmsKeyArn,
-                    value: generateSmtpPasswordFromIamKey(serviceAccountCreds.secret, svcAcctArgs.region),
+                    value: generateSmtpPasswordFromIamKey(serviceAccountCreds.secret, region),
                     tags: {
-                        Name: `pu-${svcAcctArgs.deploymentEnv}-${svcAcctArgs.deploymentName}${utils.insertServiceId(
-                            svcAcctArgs.serviceId
-                        )}-svc-account-smtp-password-ssm`,
+                        Name: `${resourcePrefix}-svc-account-smtp-password-ssm`,
                         pulumi: 'true'
                     }
                 },

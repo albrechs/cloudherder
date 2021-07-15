@@ -1,6 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import { queryFooter } from '../cloudwatch';
-import { CloudherderDatabaseArgs } from '.';
+import { RDSInstanceArgs } from '.';
 
 export interface DbErrorQuery {
     name: string;
@@ -16,8 +16,6 @@ export interface EngineDefaultConfig {
 }
 
 export const rds = {
-    rdsAutoMinorVersionUpgrade: true,
-    rdsSkipFinalSnapshot: true,
     rdsBackupRetentionPeriod: 7,
     rdsBackupWindow: '09:17-09:47'
 };
@@ -41,7 +39,7 @@ export const engineArgs = {
     } as EngineDefaultConfig
 };
 
-export function getEngineConfig(passedArgs: CloudherderDatabaseArgs): EngineDefaultConfig {
+export function getEngineConfig(passedArgs: RDSInstanceArgs): EngineDefaultConfig {
     let engineName = passedArgs.rdsEngine;
     const typedEngineKey = engineName as keyof typeof engineArgs;
     const defaultValues = engineArgs[typedEngineKey];

@@ -1,12 +1,13 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as utils from '../../utils';
 import * as monitoring from './bounce-queue-monitoring';
+import { accountId } from '../caller';
 
 export interface SESBounceQueueArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentRegion: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
-    accountId: pulumi.Input<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     kmsKeyId?: pulumi.Input<string>;
 }
 
@@ -18,13 +19,18 @@ export class SESBounceQueue extends pulumi.ComponentResource {
     constructor(name: string, queueArgs: SESBounceQueueArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:SESBounceQueue', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            queueArgs.deploymentEnv,
+            queueArgs.deploymentName,
+            queueArgs.serviceId
+        );
 
         this.snsTopic = new aws.sns.Topic(
             'bounce-sns-topic',
             {
-                name: `pu-${queueArgs.deploymentEnv}-${queueArgs.deploymentName}-bounce-sns-topic`,
+                name: `${resourcePrefix}-bounce-sns-topic`,
                 tags: {
-                    Name: `pu-${queueArgs.deploymentEnv}-${queueArgs.deploymentName}-bounce-sns-topic`,
+                    Name: `${resourcePrefix}-bounce-sns-topic`,
                     pulumi: 'true'
                 }
             },
@@ -34,10 +40,10 @@ export class SESBounceQueue extends pulumi.ComponentResource {
         this.sqsQueue = new aws.sqs.Queue(
             'bounce-sqs-queue',
             {
-                name: `pu-${queueArgs.deploymentEnv}-${queueArgs.deploymentName}-bounce-queue`,
+                name: `${resourcePrefix}-bounce-queue`,
                 kmsMasterKeyId: queueArgs.kmsKeyId,
                 tags: {
-                    Name: `pu-${queueArgs.deploymentEnv}-${queueArgs.deploymentName}-bounce-queue`,
+                    Name: `${resourcePrefix}-bounce-queue`,
                     pulumi: 'true'
                 }
             },
@@ -45,8 +51,8 @@ export class SESBounceQueue extends pulumi.ComponentResource {
         );
 
         let sqsQueuePolicyStatement = pulumi
-            .all([this.sqsQueue.arn, this.snsTopic.arn, queueArgs.accountId])
-            .apply(([queueArn, topicArn, accountId]) =>
+            .all([this.sqsQueue.arn, this.snsTopic.arn, accountId])
+            .apply(([queueArn, topicArn, account]) =>
                 JSON.stringify({
                     Version: '2012-10-17',
                     Id: `${queueArgs.deploymentName}-bounce-sqs-policy`,
@@ -55,7 +61,7 @@ export class SESBounceQueue extends pulumi.ComponentResource {
                             Sid: 'owner_statement',
                             Effect: 'Allow',
                             Principal: {
-                                AWS: `arn:aws:iam::${accountId}:root`
+                                AWS: `arn:aws:iam::${account}:root`
                             },
                             Action: 'SQS:*',
                             Resource: queueArn
@@ -102,7 +108,6 @@ export class SESBounceQueue extends pulumi.ComponentResource {
             {
                 deploymentEnv: queueArgs.deploymentEnv,
                 deploymentName: queueArgs.deploymentName,
-                deploymentRegion: queueArgs.deploymentRegion,
                 snsTopicName: this.snsTopic.name,
                 sqsQueueName: this.sqsQueue.name
             },

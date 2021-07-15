@@ -1,11 +1,13 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as utils from '../../utils';
 import { cloudwatch } from '../';
+import { region } from '../caller';
 
 export interface RDSInstrumentationArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
-    deploymentRegion: pulumi.Input<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     logQueries: cloudwatch.QueryArgs[];
     rdsInstanceName: pulumi.Input<string>;
     createDashboard?: boolean;
@@ -19,6 +21,11 @@ export class RDSInstrumentation extends pulumi.ComponentResource {
     constructor(name: string, instArgs: RDSInstrumentationArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:RDSInstrumentation', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            instArgs.deploymentEnv,
+            instArgs.deploymentName,
+            instArgs.serviceId
+        );
 
         this.logQueries = [];
         for (let i = 0; i < instArgs.logQueries.length; i++) {
@@ -40,16 +47,16 @@ export class RDSInstrumentation extends pulumi.ComponentResource {
         this.dashboardWidgets = pulumi
             .all([instArgs.logQueries, instArgs.rdsInstanceName])
             .apply(([logQueries, rdsInstanceName]) => [
-                cloudwatch.createSectionHeader(`pu-${instArgs.deploymentEnv}-${instArgs.deploymentName} RDS Metrics`),
+                cloudwatch.createSectionHeader(`${resourcePrefix} RDS Metrics`),
                 ...createRdsMonitoringWidgets({
                     y: 1,
-                    deploymentRegion: instArgs.deploymentRegion,
+                    deploymentRegion: region,
                     instanceName: rdsInstanceName
                 }),
                 ...cloudwatch.createLogWidgets({
                     y: 13,
                     queries: logQueries,
-                    deploymentRegion: instArgs.deploymentRegion
+                    deploymentRegion: region
                 })
             ]);
 
@@ -59,7 +66,7 @@ export class RDSInstrumentation extends pulumi.ComponentResource {
                     new aws.cloudwatch.Dashboard(
                         'rds-cw-dashboard',
                         {
-                            dashboardName: `pu-${instArgs.deploymentEnv}-${instArgs.deploymentName}-rds-dashboard`,
+                            dashboardName: `${resourcePrefix}-rds-dashboard`,
                             dashboardBody: JSON.stringify({
                                 widgets: widgets
                             })

@@ -1,16 +1,16 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as random from '@pulumi/random';
+import * as utils from '../../utils';
 import * as defaults from './defaults';
 import * as monitoring from './monitoring';
 import * as backup from './backup';
-import * as utils from '../../utils';
 import { cloudwatch } from '../';
-import { region } from '../caller';
 
-export interface CloudherderDatabaseArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
+export interface RDSInstanceArgs {
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     vpcId: pulumi.Input<string>;
     subnetIds: pulumi.Input<Array<string>>;
     subnetAvailabityZones: pulumi.Input<Array<string>>;
@@ -27,9 +27,9 @@ export interface CloudherderDatabaseArgs {
     rdsSkipFinalSnapshot?: boolean;
     rdsBackupRetentionPeriod?: number;
     rdsBackupWindow?: string;
-    rdsStorageType: pulumi.Input<string>;
+    rdsStorageType?: pulumi.Input<string>;
     rdsAllocatedStorage: pulumi.Input<number>;
-    rdsMasterUsername: pulumi.Input<string>;
+    rdsMasterUsername?: pulumi.Input<string>;
     rdsMasterPasswordVersion: pulumi.Input<number>;
     createRdsReadReplica?: boolean;
     enableAwsBackupResources?: boolean;
@@ -37,7 +37,7 @@ export interface CloudherderDatabaseArgs {
     createDashboard?: boolean;
 }
 
-export class PostgresInstance extends pulumi.ComponentResource {
+export class RDSInstance extends pulumi.ComponentResource {
     readonly instance: aws.rds.Instance;
     readonly instanceMasterPasswordArn: pulumi.Output<string>;
     readonly securityGroup: aws.ec2.SecurityGroup;
@@ -51,17 +51,18 @@ export class PostgresInstance extends pulumi.ComponentResource {
      * @param dbArgs The arguments to configure the database resources
      * @param opts Pulumi opts
      */
-    constructor(name: string, dbArgs: CloudherderDatabaseArgs, opts?: pulumi.ResourceOptions) {
-        super('cloudherder:aws:PostgresInstance', name, {}, opts);
+    constructor(name: string, dbArgs: RDSInstanceArgs, opts?: pulumi.ResourceOptions) {
+        super('cloudherder:aws:RDSInstance', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(dbArgs.deploymentEnv, dbArgs.deploymentName, dbArgs.serviceId);
 
         this.subnetGroup = new aws.rds.SubnetGroup(
             'rds-subnet-group',
             {
-                name: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-db-subnet-grp`,
+                name: `${resourcePrefix}-db-subnet-grp`,
                 subnetIds: dbArgs.subnetIds,
                 tags: {
-                    Name: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-db-subnet-grp`,
+                    Name: `${resourcePrefix}-db-subnet-grp`,
                     pulumi: 'true'
                 }
             },
@@ -71,17 +72,17 @@ export class PostgresInstance extends pulumi.ComponentResource {
         this.securityGroup = new aws.ec2.SecurityGroup(
             'rds-security-group',
             {
-                description: 'Security group for the the cloudherder-web pulumi deployment RDS instance',
+                description: 'Security group for the the cloudherder pulumi deployment RDS instance',
                 vpcId: dbArgs.vpcId,
                 tags: {
-                    Name: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-rds-sg`,
+                    Name: `${resourcePrefix}-rds-sg`,
                     pulumi: 'true'
                 }
             },
             defaultResourceOptions
         );
 
-        let masterPassword = new random.RandomPassword(
+        const masterPassword = new random.RandomPassword(
             'rds-random-master-password',
             {
                 length: 32,
@@ -95,7 +96,9 @@ export class PostgresInstance extends pulumi.ComponentResource {
             defaultResourceOptions
         );
 
-        let masterPasswordSsm = new aws.ssm.Parameter(
+        const ssmPathPrefix = utils.buildSSMPathPrefix(dbArgs.deploymentEnv, dbArgs.deploymentName, dbArgs.serviceId);
+
+        const masterPasswordSsm = new aws.ssm.Parameter(
             'rds-ssm-master-password',
             {
                 name: `/${dbArgs.deploymentEnv}/cloudherder-web/${dbArgs.deploymentName}/rds-master-password`,
@@ -103,7 +106,7 @@ export class PostgresInstance extends pulumi.ComponentResource {
                 keyId: dbArgs.kmsKeyId,
                 value: masterPassword.result,
                 tags: {
-                    Name: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-rds-master-password-ssm`,
+                    Name: `${resourcePrefix}-rds-master-password-ssm`,
                     pulumi: 'true'
                 }
             },
@@ -112,7 +115,7 @@ export class PostgresInstance extends pulumi.ComponentResource {
 
         this.instanceMasterPasswordArn = masterPasswordSsm.arn;
 
-        let randDataSubnetAz = new random.RandomShuffle(
+        const randDataSubnetAz = new random.RandomShuffle(
             'rds-random-az',
             {
                 inputs: dbArgs.subnetAvailabityZones,
@@ -128,34 +131,30 @@ export class PostgresInstance extends pulumi.ComponentResource {
             encryptSwitch = false;
         }
 
-        let engineArgs = defaults.getEngineConfig(dbArgs);
+        const engineArgs = defaults.getEngineConfig(dbArgs);
 
         this.instance = new aws.rds.Instance(
             'rds-instance',
             {
-                identifier: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-db`,
+                identifier: `${resourcePrefix}-db`,
                 snapshotIdentifier: dbArgs.rdsSnapshotIdentifier,
                 instanceClass: dbArgs.rdsInstanceClass,
                 deletionProtection: dbArgs.rdsDeletionProtection,
                 enabledCloudwatchLogsExports: engineArgs.logNames,
                 deleteAutomatedBackups: false,
-                skipFinalSnapshot: utils.optionalBoolComponent(
+                skipFinalSnapshot: utils.optionalBoolComponentArg(
                     'rdsSkipFinalSnapshot',
                     dbArgs.rdsSkipFinalSnapshot,
                     defaults.rds
                 ),
                 copyTagsToSnapshot: true,
-                backupRetentionPeriod: utils.optionalNumberComponent(
+                backupRetentionPeriod: utils.optionalNumberComponentArg(
                     'rdsBackupRetentionPeriod',
                     dbArgs.rdsBackupRetentionPeriod,
                     defaults.rds
                 ),
-                backupWindow: utils.optionalStringComponent('rdsBackupWindow', dbArgs.rdsBackupWindow, defaults.rds),
-                autoMinorVersionUpgrade: utils.optionalBoolComponent(
-                    'rdsAutoMinorVersionUpgrade',
-                    dbArgs.rdsAutoMinorVersionUpgrade,
-                    defaults.rds
-                ),
+                backupWindow: dbArgs.rdsBackupWindow,
+                autoMinorVersionUpgrade: dbArgs.rdsAutoMinorVersionUpgrade,
                 dbSubnetGroupName: this.subnetGroup.name,
                 availabilityZone: randDataSubnetAz,
                 multiAz: dbArgs.rdsMultiAz,
@@ -171,7 +170,7 @@ export class PostgresInstance extends pulumi.ComponentResource {
                 password: masterPassword.result,
                 iamDatabaseAuthenticationEnabled: dbArgs.rdsEnableIamAuth,
                 tags: {
-                    Name: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-db`,
+                    Name: `${resourcePrefix}-db`,
                     pulumi: 'true'
                 }
             },
@@ -182,7 +181,7 @@ export class PostgresInstance extends pulumi.ComponentResource {
             this.readReplica = new aws.rds.Instance(
                 'rds-read-replica',
                 {
-                    identifier: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-db-replica`,
+                    identifier: `${resourcePrefix}-db-replica`,
                     instanceClass: dbArgs.rdsInstanceClass,
                     replicateSourceDb: this.instance.arn,
                     storageEncrypted: true,
@@ -190,7 +189,7 @@ export class PostgresInstance extends pulumi.ComponentResource {
                     backupRetentionPeriod: 0,
                     iamDatabaseAuthenticationEnabled: true,
                     tags: {
-                        Name: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-db-replica`,
+                        Name: `${resourcePrefix}-db-replica`,
                         pulumi: 'true'
                     }
                 },
@@ -206,8 +205,8 @@ export class PostgresInstance extends pulumi.ComponentResource {
         let logQueryArr: Array<cloudwatch.QueryArgs> = [];
         for (let i = 0; i < engineArgs.logErrorQueries.length; i++) {
             logQueryArr.push({
-                name: `pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-${engineArgs.logErrorQueries[i].name}`,
-                logGroupName: `/aws/rds/instance/pu-${dbArgs.deploymentEnv}-${dbArgs.deploymentName}-db/postgresql`,
+                name: `${resourcePrefix}-${engineArgs.logErrorQueries[i].name}`,
+                logGroupName: `/aws/rds/instance/${resourcePrefix}-db/postgresql`,
                 query: engineArgs.logErrorQueries[i].query
             });
         }
@@ -233,7 +232,6 @@ export class PostgresInstance extends pulumi.ComponentResource {
                     {
                         deploymentEnv: dbArgs.deploymentEnv,
                         deploymentName: dbArgs.deploymentName,
-                        deploymentRegion: region,
                         rdsInstanceName: instance.identifier,
                         createDashboard: dbArgs.createDashboard,
                         logQueries: logQueryArr

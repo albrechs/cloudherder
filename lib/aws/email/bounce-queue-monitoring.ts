@@ -1,10 +1,12 @@
 import * as pulumi from '@pulumi/pulumi';
-import { cloudwatch } from '..';
+import * as utils from '../../utils';
+import { cloudwatch } from '../';
+import { region } from '../caller';
 
 export interface SESBounceQueueInstrumentationArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentRegion: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     snsTopicName: pulumi.Input<string>;
     sqsQueueName: pulumi.Input<string>;
 }
@@ -15,6 +17,11 @@ export class SESBounceQueueInstrumentation extends pulumi.ComponentResource {
     constructor(name: string, instArgs: SESBounceQueueInstrumentationArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:SESBounceQueueInstrumentation', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            instArgs.deploymentEnv,
+            instArgs.deploymentName,
+            instArgs.serviceId
+        );
 
         this.dashboardWidgets = pulumi.all([instArgs]).apply(([args]) => [
             cloudwatch.createSectionHeader(
@@ -23,7 +30,6 @@ export class SESBounceQueueInstrumentation extends pulumi.ComponentResource {
             ),
             ...createSESBounceQueueWidgets({
                 y: 11,
-                deploymentRegion: args.deploymentRegion,
                 snsTopicName: args.snsTopicName,
                 sqsQueueName: args.sqsQueueName
             })
@@ -33,7 +39,6 @@ export class SESBounceQueueInstrumentation extends pulumi.ComponentResource {
 
 interface SESBounceQueueWidgetsArgs {
     y: number;
-    deploymentRegion: string;
     snsTopicName: string;
     sqsQueueName: string;
 }
@@ -53,14 +58,14 @@ function createSESBounceQueueWidgets(args: SESBounceQueueWidgetsArgs): Array<clo
                             expression: 'IF(m1, 100*(m2/m1))',
                             label: 'NotificationFailureRate',
                             id: 'e1',
-                            region: args.deploymentRegion
+                            region: region
                         }
                     ],
                     ['AWS/SNS', 'NumberOfNotificationsPublished', 'TopicName', args.snsTopicName, { id: 'm1' }],
                     ['.', 'NumberOfMessagesFailed', '.', '.', { id: 'm2' }]
                 ],
                 view: 'singleValue',
-                region: args.deploymentRegion,
+                region: region,
                 stat: 'Sum',
                 period: 900,
                 title: 'SNS Publish Metrics'
@@ -79,7 +84,7 @@ function createSESBounceQueueWidgets(args: SESBounceQueueWidgetsArgs): Array<clo
                 ],
                 view: 'timeSeries',
                 stacked: false,
-                region: args.deploymentRegion,
+                region: region,
                 stat: 'Sum',
                 period: 900,
                 title: 'SNS Publish Metrics Graph',
@@ -105,7 +110,7 @@ function createSESBounceQueueWidgets(args: SESBounceQueueWidgetsArgs): Array<clo
                     ['.', 'ApproximateAgeOfOldestMessage', '.', '.', { stat: 'Average' }]
                 ],
                 view: 'singleValue',
-                region: args.deploymentRegion,
+                region: region,
                 stat: 'Sum',
                 period: 900,
                 title: 'SQS Message Metrics'
@@ -125,7 +130,7 @@ function createSESBounceQueueWidgets(args: SESBounceQueueWidgetsArgs): Array<clo
                 ],
                 view: 'timeSeries',
                 stacked: false,
-                region: args.deploymentRegion,
+                region: region,
                 stat: 'Sum',
                 period: 900,
                 title: 'SQS Message Metrics Graph',

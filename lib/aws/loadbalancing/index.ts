@@ -1,7 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as monitoring from './monitoring';
 import * as utils from '../../utils';
+import * as monitoring from './monitoring';
 
 export interface RedirectRuleArgs {
     url: pulumi.Input<string>;
@@ -18,16 +18,15 @@ export interface TargetGroupArgs {
 
 export interface AppLoadbalancerArgs {
     url: pulumi.Input<string>;
-    deploymentEnv: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
-    serviceId?: pulumi.Input<string>;
-    region: pulumi.Input<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     vpcId: pulumi.Input<string>;
     subnetIds: pulumi.Input<Array<string>>;
     internal?: boolean;
     enableLogging: boolean;
     loggingBucketId?: pulumi.Input<string>;
-    route53ZoneId: Promise<string>;
+    route53ZoneId: pulumi.Input<string>;
     target: TargetGroupArgs;
     createDashboard?: boolean;
 }
@@ -47,6 +46,11 @@ export class AppLoadbalancer extends pulumi.ComponentResource {
     constructor(name: string, albArgs: AppLoadbalancerArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:AppLoadbalancer', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            albArgs.deploymentEnv,
+            albArgs.deploymentName,
+            albArgs.serviceId
+        );
 
         let accessLogSettings: aws.types.input.lb.LoadBalancerAccessLogs | undefined = {
             bucket: ''
@@ -66,7 +70,7 @@ export class AppLoadbalancer extends pulumi.ComponentResource {
                 description: 'Security group for the the cloudherder-web pulumi deployment ALB',
                 vpcId: albArgs.vpcId,
                 tags: {
-                    Name: `pu-${albArgs.deploymentEnv}-${albArgs.deploymentName}-alb-sg`,
+                    Name: `${resourcePrefix}-alb-sg`,
                     pulumi: 'true'
                 }
             },
@@ -76,9 +80,7 @@ export class AppLoadbalancer extends pulumi.ComponentResource {
         this.loadBalancer = new aws.lb.LoadBalancer(
             `${albArgs.deploymentName}${utils.insertServiceId(albArgs.serviceId)}-alb`,
             {
-                name: `pu-${albArgs.deploymentEnv}-${albArgs.deploymentName}${utils.insertServiceId(
-                    albArgs.serviceId
-                )}-alb-${albArgs.deploymentName}`,
+                name: `${resourcePrefix}-alb`,
                 internal: albArgs.internal,
                 loadBalancerType: 'application',
                 securityGroups: [this.securityGroup.id],
@@ -86,9 +88,7 @@ export class AppLoadbalancer extends pulumi.ComponentResource {
                 enableDeletionProtection: false,
                 accessLogs: accessLogSettings,
                 tags: {
-                    Name: `pu-${albArgs.deploymentEnv}-${albArgs.deploymentName}${utils.insertServiceId(
-                        albArgs.serviceId
-                    )}-alb-${albArgs.deploymentName}`,
+                    Name: `${resourcePrefix}-alb`,
                     pulumi: 'true'
                 }
             },
@@ -138,7 +138,7 @@ export class AppLoadbalancer extends pulumi.ComponentResource {
                 domainName: albArgs.url,
                 validationMethod: 'DNS',
                 tags: {
-                    Name: `pu-${albArgs.deploymentEnv}-${albArgs.deploymentName}-${albArgs.url}-cert`,
+                    Name: `${resourcePrefix}-cert`,
                     pulumi: 'true'
                 }
             },
@@ -233,7 +233,6 @@ export class AppLoadbalancer extends pulumi.ComponentResource {
             {
                 deploymentEnv: albArgs.deploymentEnv,
                 deploymentName: albArgs.deploymentName,
-                region: albArgs.region,
                 serviceId: albArgs.serviceId,
                 targetGroupId: this.targetGroup.arnSuffix,
                 loadbalancerId: this.loadBalancer.arnSuffix,

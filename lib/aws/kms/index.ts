@@ -1,23 +1,30 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import { createKMSKeyUsePolicy } from './iam';
+import * as utils from '../../utils';
 import { accountId, region } from '../caller';
+import { createKMSKeyUsePolicy } from './iam';
 
 export interface KMSKeyArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
 }
 
 export class KMSKey extends pulumi.ComponentResource {
     readonly key: pulumi.Output<aws.kms.Key>;
     readonly keyAlias: aws.kms.Alias;
-    readonly keyUsePolicy: aws.iam.Policy;
+    readonly keyUsePolicy: pulumi.Output<aws.iam.Policy>;
 
     constructor(name: string, kmsArgs: KMSKeyArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:KMSKey', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            kmsArgs.deploymentEnv,
+            kmsArgs.deploymentName,
+            kmsArgs.serviceId
+        );
 
-        const kmsKeyUsePolicy = pulumi.all([accountId, region]).apply(([accountId, region]) => ({
+        const kmsKeyPolicy = pulumi.all([accountId, region]).apply(([accountId, region]) => ({
             Version: '2012-10-17',
             Id: 'kms-deployment-key-policy',
             Statement: [
@@ -39,15 +46,15 @@ export class KMSKey extends pulumi.ComponentResource {
                     Action: ['kms:Encrypt*', 'kms:Decrypt*', 'kms:ReEncrypt*', 'kms:GenerateDataKey*', 'kms:Describe*'],
                     Resource: '*',
                     Condition: {
-                        ArnEquals: {
-                            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${accountId}:log-group:pu-${kmsArgs.deploymentEnv}-${kmsArgs.deploymentName}-log-grp`
+                        ArnLike: {
+                            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${accountId}:log-group:${resourcePrefix}-*`
                         }
                     }
                 }
             ]
         }));
 
-        this.key = kmsKeyUsePolicy.apply(
+        this.key = kmsKeyPolicy.apply(
             (policy) =>
                 new aws.kms.Key(
                     'kms-key',
@@ -55,7 +62,7 @@ export class KMSKey extends pulumi.ComponentResource {
                         description: `KMS key used to encrypt resources related to the ${kmsArgs.deploymentEnv}-${kmsArgs.deploymentName} deployment at rest.`,
                         policy: JSON.stringify(policy),
                         tags: {
-                            Name: `pu-${kmsArgs.deploymentEnv}-${kmsArgs.deploymentName}-key`,
+                            Name: `${resourcePrefix}-key`,
                             pulumi: 'true'
                         }
                     },
@@ -67,7 +74,7 @@ export class KMSKey extends pulumi.ComponentResource {
             'kms-key-alias',
             {
                 targetKeyId: this.key.id,
-                name: `alias/pu-${kmsArgs.deploymentEnv}-${kmsArgs.deploymentName}-key`
+                name: `alias/${resourcePrefix}-key`
             },
             defaultResourceOptions
         );
@@ -75,8 +82,6 @@ export class KMSKey extends pulumi.ComponentResource {
         this.keyUsePolicy = createKMSKeyUsePolicy({
             deploymentEnv: kmsArgs.deploymentEnv,
             deploymentName: kmsArgs.deploymentName,
-            accountId: accountId,
-            region: region,
             kmsKeyAliasName: this.keyAlias.name
         });
     }

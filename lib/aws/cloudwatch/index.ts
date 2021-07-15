@@ -1,12 +1,15 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as utils from '../../utils';
+import { region } from '../caller';
 
 export const queryFooter = `| sort @timestamp desc
     | limit 40`;
 
 export interface CloudwatchDashboardArgs {
-    resourcePrefix: string;
-    deploymentRegion: string;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     resourceWidgetSections: Array<pulumi.Input<Array<DashboardWidget>>>;
 }
 
@@ -16,6 +19,7 @@ export class CloudwatchDashboard extends pulumi.ComponentResource {
     constructor(name: string, cwArgs: CloudwatchDashboardArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:CloudwatchDashboard', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(cwArgs.deploymentEnv, cwArgs.deploymentName, cwArgs.serviceId);
 
         const stackedWidgets = pulumi
             .all([cwArgs.resourceWidgetSections])
@@ -26,7 +30,7 @@ export class CloudwatchDashboard extends pulumi.ComponentResource {
                 new aws.cloudwatch.Dashboard(
                     'cw-stack-dashboard',
                     {
-                        dashboardName: `${cwArgs.resourcePrefix}-dashboard`,
+                        dashboardName: `${resourcePrefix}-dashboard`,
                         dashboardBody: JSON.stringify({
                             widgets: [
                                 ...widgets.widgets,
@@ -43,17 +47,17 @@ export class CloudwatchDashboard extends pulumi.ComponentResource {
                                                 'AWS/Logs',
                                                 'IncomingLogEvents',
                                                 'LogGroupName',
-                                                `${cwArgs.resourcePrefix}-log-grp`
+                                                `${resourcePrefix}-log-grp`
                                             ],
                                             [
                                                 '...',
-                                                `/aws/ecs/containerinsights/${cwArgs.resourcePrefix}-ecs-cluster/performance`
+                                                `/aws/ecs/containerinsights/${resourcePrefix}-ecs-cluster/performance`
                                             ],
-                                            ['...', `/aws/rds/instance/${cwArgs.resourcePrefix}-db/postgresql`]
+                                            ['...', `/aws/rds/instance/${resourcePrefix}-db/postgresql`]
                                         ],
                                         view: 'singleValue',
                                         stacked: false,
-                                        region: cwArgs.deploymentRegion,
+                                        region: region,
                                         stat: 'Sum',
                                         period: 3600,
                                         title: 'Log Group Events per Hour'

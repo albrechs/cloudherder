@@ -1,11 +1,13 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import { cloudwatch } from '..';
+import * as utils from '../../utils';
+import { cloudwatch } from '../';
+import { region } from '../caller';
 
 export interface SESDomainInstrumentationArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentRegion: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     bounceQueueWidgets: pulumi.Input<cloudwatch.DashboardWidget[]>;
     createDashboard?: boolean;
 }
@@ -19,11 +21,16 @@ export class SESDomainInstrumentation extends pulumi.ComponentResource {
     constructor(name: string, instArgs: SESDomainInstrumentationArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:SESDomainInstrumentation', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            instArgs.deploymentEnv,
+            instArgs.deploymentName,
+            instArgs.serviceId
+        );
 
         this.configurationSet = new aws.ses.ConfigurationSet(
             'ses-monitoring-config-set',
             {
-                name: `pu-${instArgs.deploymentEnv}-${instArgs.deploymentName}-ses-config-set`
+                name: `${resourcePrefix}-ses-config-set`
             },
             defaultResourceOptions
         );
@@ -45,11 +52,10 @@ export class SESDomainInstrumentation extends pulumi.ComponentResource {
         );
 
         this.dashboardWidgets = pulumi.all([instArgs.bounceQueueWidgets]).apply(([bounceQueueWidgets]) => [
-            cloudwatch.createSectionHeader(`pu-${instArgs.deploymentEnv}-${instArgs.deploymentName} SES Metrics`),
+            cloudwatch.createSectionHeader(`${resourcePrefix} SES Metrics`),
             ...createSesPerformanceMetricsWidgets({
                 y: 1,
-                configSetName: this.configurationSet.name,
-                region: instArgs.deploymentRegion
+                configSetName: this.configurationSet.name
             }),
             ...bounceQueueWidgets
         ]);
@@ -60,7 +66,7 @@ export class SESDomainInstrumentation extends pulumi.ComponentResource {
                     new aws.cloudwatch.Dashboard(
                         'ses-cw-dashboard',
                         {
-                            dashboardName: `pu-${instArgs.deploymentEnv}-${instArgs.deploymentName}-ses-dashboard`,
+                            dashboardName: `${resourcePrefix}-ses-dashboard`,
                             dashboardBody: JSON.stringify({
                                 widgets: widgets
                             })
@@ -75,7 +81,6 @@ export class SESDomainInstrumentation extends pulumi.ComponentResource {
 interface sesPerformanceMetricsArgs {
     y: number;
     configSetName: pulumi.Input<string>;
-    region: pulumi.Input<string>;
 }
 
 function createSesPerformanceMetricsWidgets(args: sesPerformanceMetricsArgs): Array<cloudwatch.DashboardWidget> {
@@ -95,7 +100,7 @@ function createSesPerformanceMetricsWidgets(args: sesPerformanceMetricsArgs): Ar
                     ['.', 'Complaint', '.', '.', { label: 'Complaint' }]
                 ],
                 view: 'singleValue',
-                region: args.region,
+                region: region,
                 stat: 'Sum',
                 period: 3600,
                 title: `${args.configSetName} SES Config Set Send Statistics`
@@ -116,7 +121,7 @@ function createSesPerformanceMetricsWidgets(args: sesPerformanceMetricsArgs): Ar
                     ['.', 'Complaint', '.', '.', { label: 'Complaint' }]
                 ],
                 view: 'timeSeries',
-                region: args.region,
+                region: region,
                 stat: 'Sum',
                 period: 300,
                 title: `${args.configSetName} SES Config Set Send Statistics`,

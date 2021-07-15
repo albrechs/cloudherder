@@ -22,21 +22,21 @@ export function optionalBoolConfig(configKey: string, defaultsObj: object, confi
     return config.getBoolean(`${configKey}`) === undefined ? configDefaultValue : config.requireBoolean(`${configKey}`);
 }
 
-export function optionalStringComponent(configKey: string, passedValue: string | undefined, defaults: object) {
+export function optionalStringComponentArg(configKey: string, passedValue: string | undefined, defaults: object) {
     let typedConfigKey = configKey as keyof typeof defaults;
     let configDefaultValue = defaults[typedConfigKey] as string;
 
     return passedValue === undefined ? configDefaultValue : passedValue;
 }
 
-export function optionalNumberComponent(configKey: string, passedValue: number | undefined, defaults: object) {
+export function optionalNumberComponentArg(configKey: string, passedValue: number | undefined, defaults: object) {
     let typedConfigKey = configKey as keyof typeof defaults;
     let configDefaultValue = defaults[typedConfigKey] as number;
 
     return passedValue === undefined ? configDefaultValue : passedValue;
 }
 
-export function optionalBoolComponent(configKey: string, passedValue: boolean | undefined, defaultsObj: object) {
+export function optionalBoolComponentArg(configKey: string, passedValue: boolean | undefined, defaultsObj: object) {
     let typedConfigKey = configKey as keyof typeof defaultsObj;
     let configDefaultValue = defaultsObj[typedConfigKey] as boolean;
 
@@ -54,4 +54,20 @@ export function insertServiceId(serviceId: pulumi.Input<string> | undefined): pu
     } else {
         return undefined;
     }
+}
+
+export function buildSSMPathPrefix(env: string, name: string, service?: string): string {
+    let pathPrefix = `/${env}/${name}`;
+    if (service) {
+        pathPrefix += `/${service}`;
+    }
+    return pathPrefix;
+}
+
+export function buildResourcePrefix(env: string, name: string, service?: string): string {
+    let resourcePrefix = `pu-${env}-${name}`;
+    if (service) {
+        resourcePrefix += `-${service}`;
+    }
+    return resourcePrefix;
 }

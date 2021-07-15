@@ -1,9 +1,11 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as utils from '../../utils';
 
 export interface BackupArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
     rdsInstanceArn: pulumi.Input<string>;
     kmsKeyArn?: pulumi.Input<string>;
     backupRoleArn?: pulumi.Input<string>;
@@ -23,14 +25,19 @@ export class RDSBackup extends pulumi.ComponentResource {
     constructor(name: string, backupArgs: BackupArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:RDSBackup', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            backupArgs.deploymentEnv,
+            backupArgs.deploymentName,
+            backupArgs.serviceId
+        );
 
         this.vault = new aws.backup.Vault(
             'aws-backup-vault',
             {
-                name: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-vault`,
+                name: `${resourcePrefix}-backup-vault`,
                 kmsKeyArn: backupArgs.kmsKeyArn,
                 tags: {
-                    Name: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-vault`,
+                    Name: `${resourcePrefix}-backup-vault`,
                     pulumi: 'true'
                 }
             },
@@ -77,10 +84,10 @@ export class RDSBackup extends pulumi.ComponentResource {
         this.plan = new aws.backup.Plan(
             'aws-backup-plan',
             {
-                name: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-plan`,
+                name: `${resourcePrefix}-backup-plan`,
                 rules: [
                     {
-                        ruleName: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-rule-nightly`,
+                        ruleName: `${resourcePrefix}-backup-rule-nightly`,
                         targetVaultName: this.vault.name,
                         startWindow: 60,
                         completionWindow: 180,
@@ -91,7 +98,7 @@ export class RDSBackup extends pulumi.ComponentResource {
                         }
                     },
                     {
-                        ruleName: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-rule-continuous`,
+                        ruleName: `${resourcePrefix}-backup-rule-continuous`,
                         targetVaultName: this.vault.name,
                         enableContinuousBackup: true,
                         schedule: 'cron(0 7 * * ? *)',
@@ -101,7 +108,7 @@ export class RDSBackup extends pulumi.ComponentResource {
                     }
                 ],
                 tags: {
-                    Name: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-plan`,
+                    Name: `${resourcePrefix}-backup-plan`,
                     pulumi: 'true'
                 }
             },
@@ -113,7 +120,7 @@ export class RDSBackup extends pulumi.ComponentResource {
             let backupRole = new aws.iam.Role(
                 'aws-backup-role',
                 {
-                    name: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-role`,
+                    name: `${resourcePrefix}-backup-role`,
                     assumeRolePolicy: JSON.stringify({
                         Version: '2012-10-17',
                         Statement: [
@@ -127,7 +134,7 @@ export class RDSBackup extends pulumi.ComponentResource {
                         ]
                     }),
                     tags: {
-                        Name: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-role`,
+                        Name: `${resourcePrefix}-backup-role`,
                         pulumi: 'true'
                     }
                 },
@@ -148,7 +155,7 @@ export class RDSBackup extends pulumi.ComponentResource {
         this.selection = new aws.backup.Selection(
             'aws-backup-selection',
             {
-                name: `pu-${backupArgs.deploymentEnv}-${backupArgs.deploymentName}-backup-selection`,
+                name: `${resourcePrefix}-backup-selection`,
                 iamRoleArn: backupRoleArn,
                 planId: this.plan.id,
                 resources: [backupArgs.rdsInstanceArn]

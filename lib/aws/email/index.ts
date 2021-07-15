@@ -1,15 +1,16 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as utils from '../../utils';
 import * as monitoring from './monitoring';
-import { SESBounceQueue } from './bounce-queue';
-import { SESFromEmail } from './iam';
 import * as iam from './iam';
 import { accountId, region } from '../caller';
+import { SESBounceQueue } from './bounce-queue';
 
 export interface SESDomainArgs {
-    deploymentEnv: pulumi.Input<string>;
-    deploymentName: pulumi.Input<string>;
-    route53ZoneId: Promise<string>;
+    deploymentEnv: string;
+    deploymentName: string;
+    serviceId?: string;
+    route53ZoneId: pulumi.Input<string>;
     mailFromDomainName: pulumi.Input<string>;
     mailFromAccounts: Array<string>;
     createSMTPServiceAccounts: boolean;
@@ -26,6 +27,11 @@ export class SESDomain extends pulumi.ComponentResource {
     constructor(name: string, sesArgs: SESDomainArgs, opts?: pulumi.ResourceOptions) {
         super('cloudherder:aws:SESDomain', name, {}, opts);
         const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
+        const resourcePrefix = utils.buildResourcePrefix(
+            sesArgs.deploymentEnv,
+            sesArgs.deploymentName,
+            sesArgs.serviceId
+        );
 
         this.domainIdentity = new aws.ses.DomainIdentity(
             'ses-domain-identity',
@@ -39,11 +45,9 @@ export class SESDomain extends pulumi.ComponentResource {
             this.fromEmails = [];
             for (let i = 0; i < sesArgs.mailFromAccounts.length; i++) {
                 this.fromEmails.push(
-                    new SESFromEmail(`ses-${sesArgs.mailFromAccounts[i]}-from-email-configuration`, {
+                    new iam.SESFromEmail(`ses-${sesArgs.mailFromAccounts[i]}-from-email-configuration`, {
                         deploymentEnv: sesArgs.deploymentEnv,
                         deploymentName: sesArgs.deploymentName,
-                        accountId: accountId,
-                        region: region,
                         fromAccount: sesArgs.mailFromAccounts[i],
                         domainIdentity: this.domainIdentity.domain,
                         createSmtpServiceAccount: sesArgs.createSMTPServiceAccounts,
@@ -57,9 +61,7 @@ export class SESDomain extends pulumi.ComponentResource {
             `ses-${sesArgs.mailFromDomainName}-bounce-queue`,
             {
                 deploymentEnv: sesArgs.deploymentEnv,
-                deploymentRegion: region,
                 deploymentName: sesArgs.deploymentName,
-                accountId: accountId,
                 kmsKeyId: sesArgs.kmsKeyId
             },
             defaultResourceOptions
@@ -159,7 +161,6 @@ export class SESDomain extends pulumi.ComponentResource {
             {
                 deploymentEnv: sesArgs.deploymentEnv,
                 deploymentName: sesArgs.deploymentName,
-                deploymentRegion: region,
                 bounceQueueWidgets: this.bounceQueue.instrumentation.dashboardWidgets,
                 createDashboard: sesArgs.createDashboard
             },
