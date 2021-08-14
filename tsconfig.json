@@ -11,7 +11,9 @@
         "pretty": true,
         "noFallthroughCasesInSwitch": true,
         "noImplicitReturns": true,
-        "forceConsistentCasingInFileNames": true
+        "forceConsistentCasingInFileNames": true,
+        "allowJs": true,
+        "declaration": true
     },
     "include": ["./index.ts", "./index.d.ts", "./src/**/*"]
 }

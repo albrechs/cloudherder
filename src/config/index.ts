@@ -1,11 +1,16 @@
 import * as pulumi from '@pulumi/pulumi';
+import * as caller from './caller';
 
-export interface Data {
+interface Data {
     deploymentEnv: string;
     deploymentName: string;
 }
 
 const config = new pulumi.Config();
-export const cloudherder = config.requireObject<Data>('cloudherder');
+const cloudherder = config.requireObject<Data>('cloudherder');
 
-export * as caller from './caller';
+export {
+    caller,
+    cloudherder,
+    Data
+}
